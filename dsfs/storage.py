@@ -1,5 +1,7 @@
 import os
-from webob import Request, Response
+from urlparse import parse_qs
+
+from webob import Response
 from webob.exc import HTTPNotFound
 
 from .node import Node
@@ -10,16 +12,21 @@ node.add_volume(Volume('boo', '/tmp/boo'))
 
 
 def application(env, start_response):
-    req = Request(env)
     res = None
-    if req.path.startswith('/volume/'):
-        volume = req.path.split('/')[2]
-        if req.method == 'PUT':
-            node.put(volume, req.GET['collection'], req.GET['key'], req.body_file)
+    path = env['PATH_INFO'].lstrip('/')
+    method = env['REQUEST_METHOD']
+    args = parse_qs(env.get('QUERY_STRING', ''))
+    if path.startswith('volume/'):
+        parts = path.split('/')
+        volume = parts[1]
+        collection = parts[2]
+        if method == 'PUT':
+            node.put(volume, collection, args['key'][0], env['wsgi.input'])
             res = Response('Ok')
-        elif req.method == 'GET':
-            fname, meta = node.get(volume, req.GET['collection'], req.GET['key'])
-            res = Response(app_iter=env['wsgi.file_wrapper'](open(fname, 'rb'), 1 << 12))
+        elif method == 'GET':
+            fname, meta = node.get(volume, collection, args['key'][0])
+            res = Response()
+            res.headers['X-Sendfile'] = fname
 
     if not res:
         res = HTTPNotFound()
