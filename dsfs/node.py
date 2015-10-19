@@ -21,6 +21,9 @@ class Node(object):
             tx.put('{}:{}:{}'.format(partition, collection, key),
                    dumps(meta or {}))
 
+    def tmpname(self, volume):
+        return self.volumes[volume].tmpname()
+
     def get(self, volume, collection, key):
         partition, _ = keysplit(key)
         with self.db.begin() as tx:
