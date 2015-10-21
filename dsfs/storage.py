@@ -1,14 +1,16 @@
-from urlparse import parse_qs
+import os.path
+from urlparse import parse_qsl
 from cStringIO import StringIO
 
 import uwsgi
 from webob import Response
 from webob.exc import HTTPNotFound
+from webob.multidict import MultiDict
 
 from .node import Node
 from .volume import Volume
 
-node = Node('/tmp/boo')
+node = Node()
 node.add_volume(Volume('boo', '/tmp/boo'))
 
 RSIZE = 16384
@@ -24,7 +26,7 @@ def put_file(env, start_response, volume, collection, key):
     else:
         buf = StringIO()
         sz = 0
-        tmpname = node.tmpname(volume)
+        tmpname = volume.tmpname()
         tmpf = None
         while toread > 0:
             yield uwsgi.wait_fd_read(fd, 30)
@@ -49,7 +51,11 @@ def put_file(env, start_response, volume, collection, key):
             buf.seek(0)
             fobj = buf
 
-    node.put(volume, collection, key, fobj)
+    meta = {}
+    if 'CONTENT_TYPE' in env:
+        meta['ct'] = env['CONTENT_TYPE']
+
+    volume.put(collection, key, fobj, meta)
 
     start_response('200 OK', [('Content-Type', 'text/plain')])
     yield 'Ok'
@@ -59,18 +65,24 @@ def application(env, start_response):
     res = None
     path = env['PATH_INFO'].lstrip('/')
     method = env['REQUEST_METHOD']
-    args = parse_qs(env.get('QUERY_STRING', ''))
-    if path.startswith('volume/'):
-        parts = path.split('/')
-        volume = parts[1]
-        collection = parts[2]
+    args = MultiDict(parse_qsl(env.get('QUERY_STRING', '')))
+
+    parts = path.split('/')
+    volume = args.get('volume')
+    if volume:
+        v = node.volumes[volume]
+        collection = parts[0]
         if method == 'PUT':
             return put_file(env, start_response,
-                            volume, collection, args['key'][0])
+                            v, collection, args['key'])
         elif method == 'GET':
-            fname, meta = node.get(volume, collection, args['key'][0])
+            fname, meta = v.get(collection, args['key'])
             res = Response()
+            res.charset = None
             res.headers['X-Sendfile'] = fname
+            res.content_length = os.path.getsize(fname)
+            if 'ct' in meta:
+                res.content_type = meta['ct']
 
     if not res:
         res = HTTPNotFound()
