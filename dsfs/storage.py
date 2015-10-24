@@ -1,6 +1,7 @@
 import os.path
 from urlparse import parse_qsl
 from cStringIO import StringIO
+from zlib import crc32
 
 import uwsgi
 from webob import Response
@@ -21,19 +22,23 @@ def put_file(env, start_response, volume, collection, key):
     f = env['wsgi.input']
     fd = f.fileno()
     toread = uwsgi.cl()
+    tmpf = None
+    crc = 0
     if toread < RSIZE:
-        fobj = f
+        data = f.read()
+        crc = crc32(data, crc)
+        buf = StringIO(data)
     else:
         buf = StringIO()
         sz = 0
         tmpname = volume.tmpname()
-        tmpf = None
         while toread > 0:
             yield uwsgi.wait_fd_read(fd, 30)
             data = f.read(min(toread, RSIZE))
             rbytes = len(data)
             toread -= rbytes
             sz += rbytes
+            crc = crc32(data, crc)
             buf.write(data)
             if sz > WSIZE:
                 if not tmpf:
@@ -42,16 +47,16 @@ def put_file(env, start_response, volume, collection, key):
                 buf = StringIO()
                 sz = 0
 
-        if tmpf:
-            if sz:
-                tmpf.write(buf.getvalue())
-            tmpf.close()
-            fobj = tmpname
-        else:
-            buf.seek(0)
-            fobj = buf
+    if tmpf:
+        if sz:
+            tmpf.write(buf.getvalue())
+        tmpf.close()
+        fobj = tmpname
+    else:
+        buf.seek(0)
+        fobj = buf
 
-    meta = {}
+    meta = {'crc': crc & 0xffffffff}
     if 'CONTENT_TYPE' in env:
         meta['ct'] = env['CONTENT_TYPE']
 
@@ -80,6 +85,7 @@ def application(env, start_response):
             res = Response()
             res.charset = None
             res.headers['X-Sendfile'] = fname
+            res.headers['X-Crc'] = str(meta['crc'])
             res.content_length = os.path.getsize(fname)
             if 'ct' in meta:
                 res.content_type = meta['ct']
