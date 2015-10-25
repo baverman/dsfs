@@ -8,11 +8,16 @@ from webob import Response
 from webob.exc import HTTPNotFound
 from webob.multidict import MultiDict
 
-from .node import Node
+from .cluster import Cluster, Node
 from .volume import Volume
 
-node = Node()
-node.add_volume(Volume('boo', '/tmp/boo'))
+current_node = Node('n1')
+current_node.add_volume(Volume('v1', '/tmp/v1'))
+current_node.add_volume(Volume('v2', '/tmp/v2'))
+
+cluster = Cluster(1)
+cluster.add_node('g1', current_node)
+
 
 RSIZE = 16384
 WSIZE = 1 << 18  # 256k
@@ -74,8 +79,15 @@ def application(env, start_response):
 
     parts = path.split('/')
     volume = args.get('volume')
+    if not volume:
+        volumes = cluster.get_volumes(args['key'])
+        for v in volumes:
+            if v.id in current_node.volumes:
+                volume = v.id
+                break
+
     if volume:
-        v = node.volumes[volume]
+        v = current_node.volumes[volume]
         collection = parts[0]
         if method == 'PUT':
             return put_file(env, start_response,

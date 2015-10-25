@@ -5,14 +5,16 @@ from uuid import uuid4
 import lmdb
 from msgpack import dumps, loads
 
-from .utils import ensure_path, keysplit
+from .utils import ensure_path
+from .hashring import keysplit
 
-DBSIZE = 2 * (1 << 30)  # 1Gb
+DBSIZE = 1 << 29  # 512MB
 
 
 class Volume(object):
-    def __init__(self, id, path):
+    def __init__(self, id, path, weight=1):
         self.id = id
+        self.weight = weight
         self.db = lmdb.open(path, map_size=DBSIZE)
         self.path = path
         self.tmppath = os.path.join(self.path, 'tmp')
@@ -53,3 +55,6 @@ class Volume(object):
             return os.path.join(dirname, key), data
 
         return None, None
+
+    def __repr__(self):
+        return 'Volume({}, {})'.format(self.id, self.path)

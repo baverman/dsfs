@@ -1,5 +1,20 @@
 from bisect import insort, bisect
-from .utils import partition
+from hashlib import sha1
+
+PARTITION_COUNT = 0xfffff + 1
+
+
+def keyhash(key):
+    return sha1(key).hexdigest()
+
+
+def partition(key):
+    return int(keyhash(key)[:5], 16)
+
+
+def keysplit(key):
+    khash = keyhash(key)
+    return khash[:5], khash[5:]
 
 
 class HashRing(object):
@@ -20,4 +35,4 @@ class HashRing(object):
         return  self.nodes[self.keys[idx]]
 
     def __getitem__(self, key):
-        return self.get(partition(key, self.pnum))
+        return self.get(partition(key))

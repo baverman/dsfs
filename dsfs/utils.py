@@ -1,23 +1,6 @@
 import errno
 import os.path
 
-from hashlib import sha1
-
-PARTITION_COUNT = 0xfffff + 1
-
-
-def keyhash(key):
-    return sha1(key).hexdigest()
-
-
-def partition(key):
-    return int(keyhash(key)[:5], 16)
-
-
-def keysplit(key):
-    khash = keyhash(key)
-    return khash[:5], khash[5:]
-
 
 def ensure_path(path):
     try:
@@ -25,3 +8,17 @@ def ensure_path(path):
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise
+
+
+class cached_property(object):
+    def __init__(self, func):
+        self.func = func
+        self.__name__ = func.__name__
+        self.__doc__ = func.__doc__
+
+    def __get__(self, obj, cls):
+        if obj is None:
+            return self
+        val = self.func(obj)
+        obj.__dict__[self.__name__] = val
+        return val
