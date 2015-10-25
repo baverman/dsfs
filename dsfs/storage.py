@@ -5,19 +5,13 @@ from zlib import crc32
 
 import uwsgi
 from webob import Response
-from webob.exc import HTTPNotFound
+from webob.exc import HTTPNotFound, HTTPTemporaryRedirect
 from webob.multidict import MultiDict
 
-from .cluster import Cluster, Node
-from .volume import Volume
+from . import config
 
-current_node = Node('n1')
-current_node.add_volume(Volume('v1', '/tmp/v1'))
-current_node.add_volume(Volume('v2', '/tmp/v2'))
-
-cluster = Cluster(1)
-cluster.add_node('g1', current_node)
-
+cluster = config.get_cluster_from_config('dsfs.conf')
+current_node = cluster.find_node(os.environ['DSFS_NODE'])
 
 RSIZE = 16384
 WSIZE = 1 << 18  # 256k
@@ -82,7 +76,7 @@ def application(env, start_response):
     if not volume:
         volumes = cluster.get_volumes(args['key'])
         for v in volumes:
-            if v.id in current_node.volumes:
+            if v.node is current_node and v.id in current_node.volumes:
                 volume = v.id
                 break
 
@@ -101,6 +95,16 @@ def application(env, start_response):
             res.content_length = os.path.getsize(fname)
             if 'ct' in meta:
                 res.content_type = meta['ct']
+    else:
+        collection = parts[0]
+        key = args['key']
+        v = volumes[0]
+        res = HTTPTemporaryRedirect(
+            location='http://{}/{}?key={}&volume={}'.format(v.node.id, collection, key, v.id))
+        for v in volumes:
+            res.headers.add(
+                'X-Location',
+                'http://{}/{}?key={}&volume={}'.format(v.node.id, collection, key, v.id))
 
     if not res:
         res = HTTPNotFound()

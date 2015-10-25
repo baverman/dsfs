@@ -10,6 +10,11 @@ class Cluster(object):
         self.rcount = 3
         self.groups = OrderedDict()
 
+    def find_node(self, node):
+        for r in self.groups.values():
+            if node in r:
+                return r[node]
+
     def add_node(self, group, node):
         self.groups.setdefault(group, OrderedDict())[node.id] = node
         try:
@@ -20,8 +25,6 @@ class Cluster(object):
     def get_volumes(self, key):
         p = partition(key)
         d = PARTITION_COUNT / self.rcount
-        print [int(p + d * r + 0.5) % PARTITION_COUNT
-               for r in xrange(self.rcount)]
         return [self.ring.get(int(p + d * r + 0.5) % PARTITION_COUNT)
                 for r in xrange(self.rcount)]
 
@@ -49,4 +52,8 @@ class Node(object):
         self.volumes = OrderedDict((r.id, r) for r in volumes or [])
 
     def add_volume(self, volume):
+        volume.node = self
         self.volumes[volume.id] = volume
+
+    def __repr__(self):
+        return 'Node({})'.format(self.id)

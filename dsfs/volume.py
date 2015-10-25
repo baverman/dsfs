@@ -12,9 +12,10 @@ DBSIZE = 1 << 29  # 512MB
 
 
 class Volume(object):
-    def __init__(self, id, path, weight=1):
+    def __init__(self, id, path, weight=None):
         self.id = id
-        self.weight = weight
+        self.weight = weight or 1
+        self.node = None
         self.db = lmdb.open(path, map_size=DBSIZE)
         self.path = path
         self.tmppath = os.path.join(self.path, 'tmp')
@@ -57,4 +58,5 @@ class Volume(object):
         return None, None
 
     def __repr__(self):
-        return 'Volume({}, {})'.format(self.id, self.path)
+        return 'Volume({}/{}, {})'.format(self.node and self.node.id or '',
+                                          self.id, self.path)
