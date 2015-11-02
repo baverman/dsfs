@@ -2,3 +2,4 @@
 *.http
 *.so
 /build
+./.cache

@@ -1,0 +1,7 @@
+Cython
+lmdb
+mmh3
+msgpack-python
+requests
+uWSGI
+WebOb
